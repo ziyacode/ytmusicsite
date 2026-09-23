@@ -1,13 +1,13 @@
 FROM python:3.10-slim
 
-# FFmpeg və sistem alətlərini quraşdırırıq
-RUN apt-get update && apt-get install -y ffmpeg curl && rm -rf /var/lib/apt/lists/*
+# FFmpeg, NodeJS və sistem alətlərini quraşdırırıq (NodeJS YouTube JS problemlərini həll edir)
+RUN apt-get update && apt-get install -y ffmpeg nodejs curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Asılılıqları quraşdırırıq
+# Asılılıqları quraşdırırıq və yt-dlp-ni ən son versiyaya qaldırırıq
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir -U yt-dlp
 
 # Bütün layihə fayllarını kopyalayırıq
 COPY . .

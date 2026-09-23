@@ -63,15 +63,21 @@ class DownloadRequest(BaseModel):
 def friendly_error(e) -> str:
     """Exception və ya string qəbul edir, Azərbaycanca mesaj qaytarır."""
     msg = str(e).lower()
-    if "private" in msg or "login" in msg or "sign in" in msg or "members only" in msg:
-        return "Bu video şəxsidir və ya giriş tələb edir."
+    if "bot" in msg or "confirm you're not a bot" in msg:
+        return "YouTube serveri bot kimi qəbul etdi (Render IP bloku). Cookies əlavə edilməlidir."
+    if "members only" in msg or "requires a subscription" in msg:
+        return "Bu video yalnız abunəçilər/üzvlər üçündür."
+    if "private" in msg:
+        return "Bu video gizlidir (şəxsidir) və yüklənə bilmir."
+    if "login" in msg or "sign in" in msg:
+        return "YouTube giriş və ya təhlükəsizlik təsdiqi tələb edir."
     if "copyright" in msg or "removed" in msg:
         return "Bu video müəllif hüquqları ilə qorunub və yüklənə bilmir."
     if "unavailable" in msg or "not available" in msg or "does not exist" in msg:
         return "Bu video mövcud deyil və ya silinib."
     if "age" in msg:
         return "Bu video yaşa görə məhdudlaşdırılıb."
-    if "bot" in msg or "429" in msg or "too many" in msg:
+    if "429" in msg or "too many" in msg:
         return "Çox sorğu göndərildi. Bir neçə saniyə gözləyib yenidən cəhd edin."
     if "network" in msg or "connection" in msg or "timeout" in msg:
         return "İnternet bağlantısında problem var. Bir az sonra yenidən cəhd edin."

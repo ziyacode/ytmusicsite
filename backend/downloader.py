@@ -47,6 +47,7 @@ def get_uid() -> str:
 
 
 # FFmpeg yerini tap (sistem PATH və ya imageio-ffmpeg paketindən)
+import os
 import shutil
 FFMPEG_PATH = shutil.which("ffmpeg")
 if not FFMPEG_PATH:
@@ -55,6 +56,20 @@ if not FFMPEG_PATH:
         FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
         FFMPEG_PATH = None
+
+# ── Cookie faylı (Render / Bulud serverlər üçün) ─────────────
+COOKIE_FILE = None
+if os.environ.get("YOUTUBE_COOKIES"):
+    cookie_path = DOWNLOAD_DIR / "cookies.txt"
+    try:
+        cookie_path.write_text(os.environ.get("YOUTUBE_COOKIES"), encoding="utf-8")
+        COOKIE_FILE = str(cookie_path)
+    except Exception:
+        pass
+elif (Path(__file__).parent / "cookies.txt").exists():
+    COOKIE_FILE = str(Path(__file__).parent / "cookies.txt")
+elif (Path(__file__).parent.parent / "cookies.txt").exists():
+    COOKIE_FILE = str(Path(__file__).parent.parent / "cookies.txt")
 
 # ── Ümumi yt-dlp seçənəkləri ────────────────────────────────
 
@@ -70,6 +85,12 @@ COMMON_OPTS = {
             "Chrome/124.0.0.0 Safari/537.36"
         )
     },
+    # YouTube bot blokunu (Render/VPS IP bloku) aşmaq üçün Android/iOS klientləri
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android", "ios", "web"]
+        }
+    },
     # Şəbəkə xətaları üçün retry
     "retries": 5,
     "fragment_retries": 5,
@@ -79,6 +100,9 @@ COMMON_OPTS = {
 
 if FFMPEG_PATH:
     COMMON_OPTS["ffmpeg_location"] = FFMPEG_PATH
+
+if COOKIE_FILE:
+    COMMON_OPTS["cookiefile"] = COOKIE_FILE
 
 
 # ── Metadata əldə etmə ──────────────────────────────────────
@@ -144,8 +168,14 @@ def _friendly_ydl_error(msg: str) -> str:
     low = msg.lower()
     if "ffmpeg" in low:
         return "Video/audio birləşdirmək üçün FFmpeg tələb olunur."
-    if "private" in low or "login" in low or "sign in" in low or "members only" in low:
-        return "Bu video şəxsidir və ya giriş tələb edir. Açıq videolar üçün işləyir."
+    if "bot" in low or "confirm you're not a bot" in low:
+        return "YouTube server IP-sini bloklayıb (Bot yoxlaması). Youtubedan cookies əlavə edilməlidir."
+    if "members only" in low or "requires a subscription" in low:
+        return "Bu video yalnız abunəçilər/üzvlər üçündür."
+    if "private" in low:
+        return "Bu video gizlidir (şəxsidir) və yüklənə bilmir."
+    if "login" in low or "sign in" in low:
+        return "YouTube giriş və ya təhlükəsizlik təsdiqi tələb edir (Server bot qorunması)."
     if "copyright" in low or "removed" in low:
         return "Bu video müəllif hüquqları səbəbiylə mövcud deyil."
     if "unavailable" in low or "not available" in low or "does not exist" in low:
