@@ -57,26 +57,31 @@ if not FFMPEG_PATH:
     except Exception:
         FFMPEG_PATH = None
 
-# ── Cookie faylı (Instagram və digər platformalar üçün) ─────
-COOKIE_FILE = None
-if os.environ.get("COOKIES"):
-    cookie_path = DOWNLOAD_DIR / "cookies.txt"
-    try:
-        cookie_path.write_text(os.environ.get("COOKIES"), encoding="utf-8")
-        COOKIE_FILE = str(cookie_path)
-    except Exception:
-        pass
-elif (Path(__file__).parent / "cookies.txt").exists():
-    COOKIE_FILE = str(Path(__file__).parent / "cookies.txt")
-elif (Path(__file__).parent.parent / "cookies.txt").exists():
-    COOKIE_FILE = str(Path(__file__).parent.parent / "cookies.txt")
+# ── Cookie faylı ─────────────────────────────────────────────
+COOKIE_FILE = "cookies.txt"
+if not Path(COOKIE_FILE).exists():
+    if (Path(__file__).parent / "cookies.txt").exists():
+        COOKIE_FILE = str(Path(__file__).parent / "cookies.txt")
+    elif (Path(__file__).parent.parent / "cookies.txt").exists():
+        COOKIE_FILE = str(Path(__file__).parent.parent / "cookies.txt")
+    else:
+        COOKIE_FILE = "cookies.txt"
 
-# ── Ümumi yt-dlp seçənəkləri ────────────────────────────────
-# QEYD: YouTube üçün cookiefile QOYULMUR!
-# yt-dlp cookie görəndə android klientini avtomatik ləğv edir və 'web'ə keçir.
-# 'web' isə Render-də bot blokuna düşür. 'android' klienti təkbaşına 100% işləyir.
+# ── yt-dlp seçənəkləri (ydl_opts) ──────────────────────────
+
+ydl_opts = {
+    'format': 'bestaudio/best',
+    'cookiefile': 'cookies.txt',
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['ios', 'mweb', 'android']  # Klientləri iOS və Mobil Web (və Android ehtiyat) olaraq dəyişirik
+        }
+    },
+}
 
 COMMON_OPTS = {
+    **ydl_opts,
+    "cookiefile": COOKIE_FILE,
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
@@ -87,12 +92,6 @@ COMMON_OPTS = {
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
         )
-    },
-    # YouTube bot blokunu aşmaq üçün YALNIZ Android klienti
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["android"]
-        }
     },
     # Şəbəkə xətaları üçün retry
     "retries": 5,
@@ -287,7 +286,7 @@ async def download_media(
     ydl_opts.setdefault("extractor_args", {})
     if platform == "youtube":
         ydl_opts["extractor_args"]["youtube"] = {
-            "player_client": YT_CLIENTS
+            "player_client": ["ios", "mweb", "android"]
         }
     elif platform == "tiktok" and no_watermark:
         ydl_opts["extractor_args"]["tiktok"] = {
