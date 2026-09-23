@@ -57,33 +57,52 @@ if not FFMPEG_PATH:
     except Exception:
         FFMPEG_PATH = None
 
-# ── Cookie faylı ─────────────────────────────────────────────
-COOKIE_FILE = "cookies.txt"
-if not Path(COOKIE_FILE).exists():
-    if (Path(__file__).parent / "cookies.txt").exists():
-        COOKIE_FILE = str(Path(__file__).parent / "cookies.txt")
-    elif (Path(__file__).parent.parent / "cookies.txt").exists():
-        COOKIE_FILE = str(Path(__file__).parent.parent / "cookies.txt")
-    else:
-        COOKIE_FILE = "cookies.txt"
+# ── Cookie faylı və ya Render Environment Variable ───────────
+COOKIE_FILE = None
+
+# 1. Render Environment Variable (YOUTUBE_COOKIES — Render üçün ən rahat və təhlükəsiz yol)
+cookie_env = os.environ.get("YOUTUBE_COOKIES")
+if cookie_env:
+    env_cookie_path = Path(__file__).parent / "cookies.txt"
+    try:
+        env_cookie_path.write_text(cookie_env.strip(), encoding="utf-8")
+        COOKIE_FILE = str(env_cookie_path.resolve())
+    except Exception as e:
+        print(f"[Warning] Failed to write YOUTUBE_COOKIES: {e}")
+
+# 2. Əgər fayl kimi mövcuddursa
+if not COOKIE_FILE:
+    candidates = [
+        Path("cookies.txt"),
+        Path(__file__).parent / "cookies.txt",
+        Path(__file__).parent.parent / "cookies.txt",
+    ]
+    for cand in candidates:
+        if cand.exists() and cand.stat().st_size > 0:
+            COOKIE_FILE = str(cand.resolve())
+            break
 
 # ── yt-dlp seçənəkləri (ydl_opts) ──────────────────────────
 
 ydl_opts = {
     'format': 'bestaudio/best',
-    'cookiefile': 'cookies.txt',
+    'cookiefile': COOKIE_FILE or 'cookies.txt',
     'extractor_args': {
         'youtube': {
-            'player_client': ['ios', 'mweb', 'android']  # Klientləri iOS və Mobil Web (və Android ehtiyat) olaraq dəyişirik
+            'player_client': ['android', 'web', 'tv_embedded'],
         }
     },
+    # YouTube-un bot yoxlamasını təmkinlə keçmək üçün əlavə parametrlər
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'no_warnings': True,
+    'socket_timeout': 30,
+    'geo_bypass': True,
 }
 
 COMMON_OPTS = {
     **ydl_opts,
-    "cookiefile": COOKIE_FILE,
     "quiet": True,
-    "no_warnings": True,
     "noplaylist": True,
     # İstifadəçi agent — bot blokunu azaldır
     "http_headers": {
@@ -91,14 +110,19 @@ COMMON_OPTS = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
-        )
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
     },
     # Şəbəkə xətaları üçün retry
     "retries": 5,
     "fragment_retries": 5,
     "file_access_retries": 3,
-    "socket_timeout": 30,
 }
+
+if COOKIE_FILE:
+    COMMON_OPTS["cookiefile"] = COOKIE_FILE
+elif "cookiefile" in COMMON_OPTS and not Path(COMMON_OPTS["cookiefile"]).exists():
+    del COMMON_OPTS["cookiefile"]
 
 if FFMPEG_PATH:
     COMMON_OPTS["ffmpeg_location"] = FFMPEG_PATH
@@ -286,7 +310,7 @@ async def download_media(
     ydl_opts.setdefault("extractor_args", {})
     if platform == "youtube":
         ydl_opts["extractor_args"]["youtube"] = {
-            "player_client": ["ios", "mweb", "android"]
+            "player_client": ["android", "web", "tv_embedded"]
         }
     elif platform == "tiktok" and no_watermark:
         ydl_opts["extractor_args"]["tiktok"] = {

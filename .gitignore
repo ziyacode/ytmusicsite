@@ -1,7 +1,7 @@
 backend/venv/
 backend/downloads/*
 !backend/downloads/.gitkeep
-cookies.txt
+# cookies.txt (Render-ə göndərilməsi üçün aktiv edildi)
 __pycache__/
 */__pycache__/
 *.pyc
