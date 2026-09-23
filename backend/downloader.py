@@ -71,6 +71,10 @@ elif (Path(__file__).parent / "cookies.txt").exists():
 elif (Path(__file__).parent.parent / "cookies.txt").exists():
     COOKIE_FILE = str(Path(__file__).parent.parent / "cookies.txt")
 
+# ── YouTube klient seçimi (Bulud/Render bot blokunu aşmaq üçün) ──
+# Əgər cookies yoxdursa, YALNIZ 'android' istifadə olunur (çünki 'web' Render IP-lərində bot blokuna düşür)
+YT_CLIENTS = ["web", "android"] if COOKIE_FILE else ["android"]
+
 # ── Ümumi yt-dlp seçənəkləri ────────────────────────────────
 
 COMMON_OPTS = {
@@ -85,10 +89,10 @@ COMMON_OPTS = {
             "Chrome/124.0.0.0 Safari/537.36"
         )
     },
-    # YouTube bot blokunu (Render/VPS IP bloku) aşmaq üçün Android/iOS klientləri
+    # YouTube bot blokunu (Render/VPS IP bloku) aşmaq üçün Android klienti
     "extractor_args": {
         "youtube": {
-            "player_client": ["android", "ios", "web"]
+            "player_client": YT_CLIENTS
         }
     },
     # Şəbəkə xətaları üçün retry
@@ -283,17 +287,18 @@ async def download_media(
     if merge_format:
         ydl_opts["merge_output_format"] = merge_format
 
-    # TikTok — watermark-sız
-    if platform == "tiktok" and no_watermark:
-        ydl_opts["extractor_args"] = {
-            "tiktok": {"api_hostname": "api16-normal-c-useast1a.tiktokv.com"}
+    # Platform spesifik extractor_args əlavə et
+    ydl_opts.setdefault("extractor_args", {})
+    if platform == "youtube":
+        ydl_opts["extractor_args"]["youtube"] = {
+            "player_client": YT_CLIENTS
         }
-
-    # Instagram — cookie-sız giriş üçün
-    if platform == "instagram":
-        ydl_opts["extractor_args"] = {
-            "instagram": {}
+    elif platform == "tiktok" and no_watermark:
+        ydl_opts["extractor_args"]["tiktok"] = {
+            "api_hostname": "api16-normal-c-useast1a.tiktokv.com"
         }
+    elif platform == "instagram":
+        ydl_opts["extractor_args"]["instagram"] = {}
 
     # ── Asinxron yükləmə başlat ──────────────────────────────
     loop = asyncio.get_running_loop()
