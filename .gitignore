@@ -1,0 +1,8 @@
+backend/venv/
+backend/downloads/*
+!backend/downloads/.gitkeep
+cookies.txt
+__pycache__/
+*/__pycache__/
+*.pyc
+.env

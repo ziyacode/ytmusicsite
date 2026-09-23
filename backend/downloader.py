@@ -57,12 +57,12 @@ if not FFMPEG_PATH:
     except Exception:
         FFMPEG_PATH = None
 
-# ── Cookie faylı (Render / Bulud serverlər üçün) ─────────────
+# ── Cookie faylı (Instagram və digər platformalar üçün) ─────
 COOKIE_FILE = None
-if os.environ.get("YOUTUBE_COOKIES"):
+if os.environ.get("COOKIES"):
     cookie_path = DOWNLOAD_DIR / "cookies.txt"
     try:
-        cookie_path.write_text(os.environ.get("YOUTUBE_COOKIES"), encoding="utf-8")
+        cookie_path.write_text(os.environ.get("COOKIES"), encoding="utf-8")
         COOKIE_FILE = str(cookie_path)
     except Exception:
         pass
@@ -71,11 +71,10 @@ elif (Path(__file__).parent / "cookies.txt").exists():
 elif (Path(__file__).parent.parent / "cookies.txt").exists():
     COOKIE_FILE = str(Path(__file__).parent.parent / "cookies.txt")
 
-# ── YouTube klient seçimi (Bulud/Render bot blokunu aşmaq üçün) ──
-# Əgər cookies yoxdursa, YALNIZ 'android' istifadə olunur (çünki 'web' Render IP-lərində bot blokuna düşür)
-YT_CLIENTS = ["web", "android"] if COOKIE_FILE else ["android"]
-
 # ── Ümumi yt-dlp seçənəkləri ────────────────────────────────
+# QEYD: YouTube üçün cookiefile QOYULMUR!
+# yt-dlp cookie görəndə android klientini avtomatik ləğv edir və 'web'ə keçir.
+# 'web' isə Render-də bot blokuna düşür. 'android' klienti təkbaşına 100% işləyir.
 
 COMMON_OPTS = {
     "quiet": True,
@@ -89,10 +88,10 @@ COMMON_OPTS = {
             "Chrome/124.0.0.0 Safari/537.36"
         )
     },
-    # YouTube bot blokunu (Render/VPS IP bloku) aşmaq üçün Android klienti
+    # YouTube bot blokunu aşmaq üçün YALNIZ Android klienti
     "extractor_args": {
         "youtube": {
-            "player_client": YT_CLIENTS
+            "player_client": ["android"]
         }
     },
     # Şəbəkə xətaları üçün retry
@@ -104,9 +103,6 @@ COMMON_OPTS = {
 
 if FFMPEG_PATH:
     COMMON_OPTS["ffmpeg_location"] = FFMPEG_PATH
-
-if COOKIE_FILE:
-    COMMON_OPTS["cookiefile"] = COOKIE_FILE
 
 
 # ── Metadata əldə etmə ──────────────────────────────────────
@@ -172,20 +168,20 @@ def _friendly_ydl_error(msg: str) -> str:
     low = msg.lower()
     if "ffmpeg" in low:
         return "Video/audio birləşdirmək üçün FFmpeg tələb olunur."
+    if "format" in low and ("not available" in low or "unsupported" in low):
+        return "Bu video formatı dəstəklənmir və ya mövcud deyil."
+    if "video unavailable" in low or "this video is unavailable" in low or "does not exist" in low:
+        return "Bu video mövcud deyil və ya silinib."
     if "bot" in low or "confirm you're not a bot" in low:
-        return "YouTube server IP-sini bloklayıb (Bot yoxlaması). Youtubedan cookies əlavə edilməlidir."
+        return "YouTube server IP-sini bloklayıb (Bot yoxlaması)."
     if "members only" in low or "requires a subscription" in low:
         return "Bu video yalnız abunəçilər/üzvlər üçündür."
     if "private" in low:
         return "Bu video gizlidir (şəxsidir) və yüklənə bilmir."
     if "login" in low or "sign in" in low:
-        return "YouTube giriş və ya təhlükəsizlik təsdiqi tələb edir (Server bot qorunması)."
+        return "YouTube giriş və ya təhlükəsizlik təsdiqi tələb edir."
     if "copyright" in low or "removed" in low:
         return "Bu video müəllif hüquqları səbəbiylə mövcud deyil."
-    if "unavailable" in low or "not available" in low or "does not exist" in low:
-        return "Bu video mövcud deyil və ya silinib."
-    if "format" in low and "not available" in low:
-        return "Video formatı cihazda dəstəklənmir. Digər format sınayın."
     if "network" in low or "connection" in low or "timeout" in low or "unable to download" in low:
         return "İnternet bağlantısında problem var. Bir az sonra yenidən cəhd edin."
     if "age" in low or "18" in low:

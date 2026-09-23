@@ -63,8 +63,12 @@ class DownloadRequest(BaseModel):
 def friendly_error(e) -> str:
     """Exception və ya string qəbul edir, Azərbaycanca mesaj qaytarır."""
     msg = str(e).lower()
+    if "format" in msg and ("not available" in msg or "unsupported" in msg):
+        return "Bu video formatı dəstəklənmir və ya mövcud deyil."
+    if "video unavailable" in msg or "this video is unavailable" in msg or "does not exist" in msg:
+        return "Bu video mövcud deyil və ya silinib."
     if "bot" in msg or "confirm you're not a bot" in msg:
-        return "YouTube serveri bot kimi qəbul etdi (Render IP bloku). Cookies əlavə edilməlidir."
+        return "YouTube serveri bot kimi qəbul etdi (Render IP bloku)."
     if "members only" in msg or "requires a subscription" in msg:
         return "Bu video yalnız abunəçilər/üzvlər üçündür."
     if "private" in msg:
@@ -73,8 +77,6 @@ def friendly_error(e) -> str:
         return "YouTube giriş və ya təhlükəsizlik təsdiqi tələb edir."
     if "copyright" in msg or "removed" in msg:
         return "Bu video müəllif hüquqları ilə qorunub və yüklənə bilmir."
-    if "unavailable" in msg or "not available" in msg or "does not exist" in msg:
-        return "Bu video mövcud deyil və ya silinib."
     if "age" in msg:
         return "Bu video yaşa görə məhdudlaşdırılıb."
     if "429" in msg or "too many" in msg:
