@@ -102,10 +102,10 @@ if not COOKIE_FILE:
 
 ydl_opts = {
     'format': 'bestaudio/best',
-    'cookiefile': COOKIE_FILE or 'cookies.txt',
+    'cookiefile': COOKIE_FILE if (COOKIE_FILE and Path(COOKIE_FILE).exists()) else None,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'web']
+            'player_client': ['ios', 'android', 'mweb']
         }
     },
     # YouTube-un bot yoxlamasını təmkinlə keçmək üçün əlavə parametrlər
@@ -347,7 +347,7 @@ async def download_media(
         if platform == "youtube":
             ydl_opts.setdefault("extractor_args", {})
             ydl_opts["extractor_args"]["youtube"] = {
-                "player_client": ["android", "web"]
+                "player_client": ["ios", "android", "mweb"]
             }
 
         def _run_fallback():

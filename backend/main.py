@@ -47,6 +47,21 @@ if FRONTEND_DIR.exists():
     app.mount("/app", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 
+# ── Cookie və yt-dlp konfiqurasiyası ────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIE_PATH = os.path.join(BASE_DIR, "downloads", "cookies.txt")
+if not os.path.exists(COOKIE_PATH):
+    COOKIE_PATH = os.path.join(BASE_DIR, "cookies.txt")
+
+ydl_opts = {
+    'cookiefile': COOKIE_PATH if os.path.exists(COOKIE_PATH) else None,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['ios', 'android', 'mweb']
+        }
+    },
+}
+
 # ── Pydantic sxemləri ────────────────────────────────────────
 
 class InfoRequest(BaseModel):
