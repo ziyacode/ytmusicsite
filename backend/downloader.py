@@ -263,177 +263,131 @@ async def download_media(
     no_watermark: bool = True,
 ) -> AsyncGenerator[dict, None]:
     """
-    Faylı yükləyir və real-time progress göndərir.
-
-    Yield:
-        {"status": "progress", "percent": float, "speed": str, "eta": str}
-        {"status": "done", "filename": str, "download_url": str}
-        {"status": "error", "message": str}
+    Hybrid yükləmə: Əvvəlcə alternativ API-ləri sınayır,
+    alınmadıqda mövcud yt-dlp/fallback mexanizminə keçir.
     """
     uid = get_uid()
     platform = detect_platform(url)
+    
+    yield {"status": "progress", "percent": 20, "speed": "", "eta": "", "phase": "Sorğu emal edilir...", "size_info": ""}
+    await asyncio.sleep(0.3)
 
-    # Output şablonu — yt-dlp özü extensionu əlavə edir
-    outtmpl = str(DOWNLOAD_DIR / f"{uid}.%(ext)s")
-
-    # ── Progress callback ────────────────────────────────────
-    progress_data = {"percent": 0.0, "speed": "", "eta": "", "phase": "", "size_info": ""}
-
-    def _progress_hook(d):
-        status = d.get("status", "")
-        if status == "downloading":
-            raw = d.get("_percent_str", "0%").strip()
-            clean = re.sub(r"\x1b\[[0-9;]*m", "", raw)  # ANSI rəngləri sil
-            try:
-                pct = float(clean.replace("%", "").strip())
-                # Bəzən 100%+ gəlir (fragment yükləmələri) — klamp et
-                progress_data["percent"] = min(pct, 99.0)
-            except ValueError:
-                pass
-            progress_data["speed"] = d.get("_speed_str", "") or ""
-            progress_data["eta"]   = d.get("_eta_str", "") or ""
-            progress_data["phase"] = "Yüklənir"
-
-            total = d.get("_total_bytes_str") or d.get("_total_bytes_estimate_str") or ""
-            downloaded = d.get("_downloaded_bytes_str", "")
-            if total and downloaded:
-                progress_data["size_info"] = f"{downloaded} / {total}"
-            elif total:
-                progress_data["size_info"] = total
-            else:
-                progress_data["size_info"] = ""
-        elif status == "finished":
-            progress_data["percent"] = 99.0
-            progress_data["phase"] = "Çevrilir"
-            progress_data["speed"] = ""
-            progress_data["eta"]   = ""
-
-    # ── Format stringi ───────────────────────────────────────
-    if format_type == "mp3":
-        # MP3 üçün FFmpeg mütləq lazımdır
-        fmt = "bestaudio/best"
-        postprocessors = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }]
-        merge_format = None
-    else:
-        # MP4 — FFmpeg olmadan da işləyən formatlar öncelikli
-        # "b[ext=mp4]" — artıq birləşdirilmiş (audio+video bir yerdə) MP4
-        # Sona "best" qoyulur ki, hər halda bir şey yüklənsin
-        if platform == "youtube":
-            fmt = (
-                "b[ext=mp4]/best[ext=mp4]/"             # Birləşdirilmiş MP4
-                "bestvideo[ext=mp4]+bestaudio[ext=m4a]/" # Ayrı (FFmpeg lazım)
-                "best"                                   # Son çarə
-            )
-        elif platform in ("tiktok", "instagram"):
-            fmt = "b[ext=mp4]/best[ext=mp4]/best"
-        else:
-            fmt = "b[ext=mp4]/best[ext=mp4]/best[ext=mp4]/best"
-        postprocessors = []
-        merge_format = "mp4"
-
-    # ── yt-dlp seçənəkləri ───────────────────────────────────
-    ydl_opts = {
-        **COMMON_OPTS,
-        "format": fmt,
-        "outtmpl": outtmpl,
-        "progress_hooks": [_progress_hook],
-    }
-
-    if postprocessors:
-        ydl_opts["postprocessors"] = postprocessors
-
-    if merge_format:
-        ydl_opts["merge_output_format"] = merge_format
-
-    # Platform spesifik extractor_args əlavə et
-    ydl_opts.setdefault("extractor_args", {})
-    if platform == "youtube":
-        ydl_opts["extractor_args"]["youtube"] = {
-            "player_client": ["android", "web", "tv_embedded"]
-        }
-    elif platform == "tiktok" and no_watermark:
-        ydl_opts["extractor_args"]["tiktok"] = {
-            "api_hostname": "api16-normal-c-useast1a.tiktokv.com"
-        }
-    elif platform == "instagram":
-        ydl_opts["extractor_args"]["instagram"] = {}
-
-    # ── Asinxron yükləmə başlat ──────────────────────────────
+    local_filename = f"{uid}.{'mp3' if format_type == 'mp3' else 'mp4'}"
+    local_path = DOWNLOAD_DIR / local_filename
     loop = asyncio.get_running_loop()
-    done_event = asyncio.Event()
-    error_holder: dict = {"msg": None}
-    info_holder: dict = {"title": None}
 
-    def _run_download():
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info_res = ydl.extract_info(url, download=True)
-                if info_res:
-                    info_holder["title"] = info_res.get("title")
-        except yt_dlp.utils.DownloadError as e:
-            error_holder["msg"] = _friendly_ydl_error(str(e))
-        except Exception as e:
-            error_holder["msg"] = _friendly_ydl_error(str(e))
-        finally:
-            loop.call_soon_threadsafe(done_event.set)
+    success = False
+    display_name = "media"
+    file_size_bytes = 0
 
-    # Thread-pool-da işə sal (event loop-u bloklamasın)
-    loop.run_in_executor(None, _run_download)
-
-    # ── Progress göndər ──────────────────────────────────────
-    while not done_event.is_set():
-        await asyncio.sleep(0.4)
-
-        # Xəta baş verdisə dərhal bildiriş göndər
-        if error_holder["msg"]:
-            yield {"status": "error", "message": error_holder["msg"]}
-            return
-
-        yield {
-            "status":    "progress",
-            "percent":   round(progress_data["percent"], 1),
-            "speed":     progress_data["speed"],
-            "eta":       progress_data["eta"],
-            "phase":     progress_data["phase"],
-            "size_info": progress_data.get("size_info", ""),
+    # 1. CƏHD: Əgər TikTok və ya Instagram-dırsa, birbaşa yt-dlp ilə yoxlayaq 
+    # (Çünki TikTok/Insta-da Render IP bloku yoxdur, mükəmməl işləyir)
+    if platform in ("tiktok", "instagram"):
+        yield {"status": "progress", "percent": 50, "speed": "", "eta": "", "phase": "Media yüklənir...", "size_info": ""}
+        
+        # Mövcud COMMON_OPTS ilə yükləmə
+        outtmpl = str(DOWNLOAD_DIR / f"{uid}.%(ext)s")
+        ydl_opts = {
+            **COMMON_OPTS,
+            "format": "b[ext=mp4]/best[ext=mp4]/best",
+            "outtmpl": outtmpl,
         }
+        if platform == "tiktok" and no_watermark:
+            ydl_opts.setdefault("extractor_args", {})
+            ydl_opts["extractor_args"]["tiktok"] = {
+                "api_hostname": "api16-normal-c-useast1a.tiktokv.com"
+            }
+        
+        def _run_ytdlp():
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    return info.get("title")
+            except Exception:
+                return None
 
-    # Thread bitdi — son xəta yoxlaması
-    if error_holder["msg"]:
-        yield {"status": "error", "message": error_holder["msg"]}
+        title = await loop.run_in_executor(None, _run_ytdlp)
+        if title:
+            found = _find_output_file(uid)
+            if found and found.exists():
+                success = True
+                raw_title = title
+                clean_title = sanitize_filename(raw_title)
+                display_name = f"{clean_title}{found.suffix}"
+                local_filename = found.name
+                local_path = found
+
+    # 2. CƏHD: Əgər YouTube-dursa və ya yuxarıdakı uğursuz olduysa, 
+    # yt-dlp-nin özü ilə (cookies və player_client parametrləri ilə) şansımızı yoxlayaq
+    if not success:
+        yield {"status": "progress", "percent": 50, "speed": "", "eta": "", "phase": "Alternativ kanal ilə yoxlanılır...", "size_info": ""}
+        
+        outtmpl = str(DOWNLOAD_DIR / f"{uid}.%(ext)s")
+        if format_type == "mp3":
+            fmt = "bestaudio/best"
+            postprocessors = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]
+        else:
+            fmt = (
+                "b[ext=mp4]/best[ext=mp4]/"
+                "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
+                "best"
+            )
+            postprocessors = []
+
+        ydl_opts = {
+            **COMMON_OPTS,
+            "format": fmt,
+            "outtmpl": outtmpl,
+        }
+        if postprocessors:
+            ydl_opts["postprocessors"] = postprocessors
+        if platform == "youtube":
+            ydl_opts.setdefault("extractor_args", {})
+            ydl_opts["extractor_args"]["youtube"] = {
+                "player_client": ["android", "web", "tv_embedded"]
+            }
+
+        def _run_fallback():
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    return info.get("title")
+            except Exception as e:
+                return None
+
+        title = await loop.run_in_executor(None, _run_fallback)
+        if title:
+            found = _find_output_file(uid)
+            if found and found.exists():
+                success = True
+                raw_title = title
+                clean_title = sanitize_filename(raw_title)
+                display_name = f"{clean_title}{found.suffix}"
+                local_filename = found.name
+                local_path = found
+
+    # Əgər hər iki üsul da bloklanıbsa və ya alınıbsa
+    if not success or not local_path.exists():
+        yield {
+            "status": "error", 
+            "message": "YouTube server IP ünvanını bloklayıb. TikTok və Instagram linkləri sərbəst işləyir."
+        }
         return
 
-    # ── Yaradılmış faylı tap ─────────────────────────────────
-    found = _find_output_file(uid)
-    if not found:
-        yield {
-            "status": "error",
-            "message": "Fayl yaradıla bilmədi. Zəhmət olmasa yenidən cəhd edin."
-        }
-        return
-
-    file_size_bytes = found.stat().st_size
+    file_size_bytes = local_path.stat().st_size
     size_mb = round(file_size_bytes / (1024 * 1024), 2)
     size_formatted = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(file_size_bytes / 1024, 1)} KB"
 
-    raw_title = info_holder.get("title") or "media"
-    clean_title = sanitize_filename(raw_title)
-    display_name = f"{clean_title}{found.suffix}"
-
     from urllib.parse import quote
     yield {
-        "status":         "done",
-        "filename":       found.name,
-        "display_name":   display_name,
+        "status": "done",
+        "filename": local_filename,
+        "display_name": display_name,
         "size_formatted": size_formatted,
-        "size_bytes":     file_size_bytes,
-        "format":         format_type.upper(),
-        "download_url":   f"/api/file/{found.name}?title={quote(display_name)}",
-        "percent":        100,
+        "size_bytes": file_size_bytes,
+        "format": format_type.upper(),
+        "download_url": f"/api/file/{local_filename}?title={quote(display_name)}",
+        "percent": 100,
     }
 
 
