@@ -6,6 +6,7 @@ import yt_dlp
 import uuid
 import asyncio
 import re
+import requests
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -28,6 +29,18 @@ def detect_platform(url: str) -> str:
         if any(re.search(p, lower) for p in patterns):
             return platform
     return "generic"
+
+
+def get_youtube_id(url: str) -> str:
+    """YouTube URL-dən video ID-sini çıxarır."""
+    patterns = [
+        r'(?:v=|\/shorts\/|youtu\.be\/|\/embed\/)([0-9A-Za-z_-]{11})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
 
 
 def sanitize_filename(title: str, max_length: int = 100) -> str:
@@ -135,6 +148,36 @@ async def fetch_info(url: str) -> dict:
     Link haqqında metadata qaytarır (yükləmir).
     Bütün xətaları tutub ValueError qaldırır.
     """
+    platform = detect_platform(url)
+
+    # Əgər platforma YouTube-dursa, Piped API istifadə edirik (Bot blokuna düşməmək üçün)
+    if platform == "youtube":
+        vid_id = get_youtube_id(url)
+        if vid_id:
+            # Piped serverləri (aktiv coffee serveri + kavin.rocks)
+            piped_endpoints = [
+                "https://api.piped.private.coffee",
+                "https://pipedapi.kavin.rocks",
+            ]
+            for api_base in piped_endpoints:
+                try:
+                    api_url = f"{api_base}/streams/{vid_id}"
+                    response = requests.get(api_url, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        return {
+                            "title": data.get("title", "YouTube Video"),
+                            "thumbnail": data.get("thumbnailUrl", ""),
+                            "duration": data.get("duration", 0),
+                            "platform": "youtube",
+                            "uploader": data.get("uploader", ""),
+                            "view_count": data.get("views", 0),
+                            "estimated_size": "~çıxarıla bilər",
+                        }
+                except Exception:
+                    continue  # Xəta olarsa növbəti serverə və ya yt-dlp-yə keçir
+
+    # Digər hallarda (və ya Piped işləmədikdə) köhnə yt-dlp üsulu işləyir
     opts = {
         **COMMON_OPTS,
         "skip_download": True,
