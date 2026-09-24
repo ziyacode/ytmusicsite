@@ -105,7 +105,7 @@ ydl_opts = {
     'cookiefile': COOKIE_FILE or 'cookies.txt',
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'web', 'tv_embedded'],
+            'player_client': ['android', 'web']
         }
     },
     # YouTube-un bot yoxlamasını təmkinlə keçmək üçün əlavə parametrlər
@@ -347,7 +347,7 @@ async def download_media(
         if platform == "youtube":
             ydl_opts.setdefault("extractor_args", {})
             ydl_opts["extractor_args"]["youtube"] = {
-                "player_client": ["android", "web", "tv_embedded"]
+                "player_client": ["android", "web"]
             }
 
         def _run_fallback():
