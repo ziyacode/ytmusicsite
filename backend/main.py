@@ -54,13 +54,14 @@ if not os.path.exists(COOKIE_PATH):
     COOKIE_PATH = os.path.join(BASE_DIR, "cookies.txt")
 
 ydl_opts = {
-    'cookiefile': COOKIE_PATH if os.path.exists(COOKIE_PATH) else None,
     'extractor_args': {
         'youtube': {
             'player_client': ['ios', 'android', 'mweb']
         }
     },
 }
+if os.path.exists(COOKIE_PATH):
+    ydl_opts['cookiefile'] = COOKIE_PATH
 
 # ── Pydantic sxemləri ────────────────────────────────────────
 

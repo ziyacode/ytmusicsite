@@ -102,7 +102,6 @@ if not COOKIE_FILE:
 
 ydl_opts = {
     'format': 'bestaudio/best',
-    'cookiefile': COOKIE_FILE if (COOKIE_FILE and Path(COOKIE_FILE).exists()) else None,
     'extractor_args': {
         'youtube': {
             'player_client': ['ios', 'android', 'mweb']
@@ -115,6 +114,9 @@ ydl_opts = {
     'socket_timeout': 30,
     'geo_bypass': True,
 }
+
+if COOKIE_FILE and os.path.exists(COOKIE_FILE):
+    ydl_opts['cookiefile'] = COOKIE_FILE
 
 COMMON_OPTS = {
     **ydl_opts,
@@ -135,10 +137,12 @@ COMMON_OPTS = {
     "file_access_retries": 3,
 }
 
-if COOKIE_FILE:
+if COOKIE_FILE and os.path.exists(COOKIE_FILE):
     COMMON_OPTS["cookiefile"] = COOKIE_FILE
-elif "cookiefile" in COMMON_OPTS and not Path(COMMON_OPTS["cookiefile"]).exists():
-    del COMMON_OPTS["cookiefile"]
+elif "cookiefile" in COMMON_OPTS:
+    cf = COMMON_OPTS.get("cookiefile")
+    if not cf or not os.path.exists(str(cf)):
+        del COMMON_OPTS["cookiefile"]
 
 if FFMPEG_PATH:
     COMMON_OPTS["ffmpeg_location"] = FFMPEG_PATH
