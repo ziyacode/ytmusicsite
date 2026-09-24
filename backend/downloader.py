@@ -83,9 +83,12 @@ if cookie_env:
     except Exception as e:
         print(f"[Warning] Failed to write YOUTUBE_COOKIES: {e}")
 
-# 2. Əgər fayl kimi mövcuddursa
+# 2. Əgər fayl kimi mövcuddursa (downloads/cookies.txt prioritet olmaqla)
 if not COOKIE_FILE:
     candidates = [
+        DOWNLOAD_DIR / "cookies.txt",
+        Path("backend/downloads/cookies.txt"),
+        Path("downloads/cookies.txt"),
         Path("cookies.txt"),
         Path(__file__).parent / "cookies.txt",
         Path(__file__).parent.parent / "cookies.txt",
@@ -409,6 +412,8 @@ async def cleanup_file(filename: str, delay: int = 300):
     Yüklədikdən sonra faylı gecikdirmə ilə silir.
     Standart: 5 dəqiqə.
     """
+    if "cookies.txt" in filename.lower():
+        return
     await asyncio.sleep(delay)
     target = DOWNLOAD_DIR / filename
     if target.exists():
